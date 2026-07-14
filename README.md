@@ -1,2 +1,77 @@
-# zip-tie-3d-showcase
-3D interactive cable tie showcase with gesture control using Three.js and MediaPipe Hands. Features 10 HellermannTyton zip tie products with 3D procedural models.
+# 3D 扎带交互展示应用
+
+## 项目简介
+基于 Three.js 和 MediaPipe Hands 的 3D 扎带产品交互展示应用。用户可以通过摄像头捕捉手势，实现对 3D 扎带模型的旋转、缩放和平移操作。
+
+## 功能特性
+
+### 3D 渲染
+- 10款不同型号的扎带产品 3D 模型（程序生成）
+- 逼真的材质渲染（塑料、金属、PEEK、魔术贴等）
+- 专业光照系统（环境光 + 方向光 + 点光源）
+- 阴影效果和地面网格
+
+### 手势控制
+- **手掌移动**：旋转 3D 模型
+- **张开手掌**：放大模型
+- **握拳**：缩小模型
+- **握拳 + 移动**：平移模型
+
+### 降级方案
+- 鼠标拖拽：旋转模型
+- 鼠标滚轮：缩放模型
+- 右键拖拽：平移模型
+
+## 产品列表
+| 编号 | 型号 | 名称 |
+|------|------|------|
+| 1 | T30R | 内锯齿 PA66HS 扎带 |
+| 2 | PT2A | PEEK 外锯齿高温扎带 |
+| 3 | MBT8S | 不锈钢 316L 扎带 |
+| 4 | TEXTIE M | 魔术贴可释放扎带 |
+| 5 | T50SVCOC25-31 | 带管道固定夹扎带 |
+| 6 | KR8/43 | 无锯齿玻璃纤维销锁定扎带 |
+| 7 | T18R | PA46 耐高温扎带 |
+| 8 | T30RFT5 | 带杉树固定脚扎带 |
+| 9 | KR8/S1 | 无尽长度扎带系统 |
+| 10 | SR255S | 可释放重型扎带 |
+
+## 技术栈
+- Three.js (r160+) - 3D 渲染引擎
+- MediaPipe Hands - 手势识别
+- ES6 Modules - 模块化开发
+- Nginx - 静态文件服务
+
+## 快速开始
+
+### 直接使用浏览器
+在浏览器中打开 `index.html` 文件即可（需要 HTTP 服务器以支持 ES6 Modules）。
+
+### 使用 Docker
+```bash
+docker-compose up -d
+# 访问 http://localhost:8080
+```
+
+## 手势操作指南
+| 手势 | 操作 |
+|------|------|
+| 手掌上下左右移动 | 旋转模型 |
+| 张开手掌（五指张开）| 放大 |
+| 握拳（四指弯曲）| 缩小 |
+| 握拳 + 左右移动 | 水平平移 |
+| 握拳 + 上下移动 | 垂直平移 |
+
+## 浏览器兼容性
+- Chrome 90+
+- Firefox 90+
+- Safari 15+
+- Edge 90+
+
+> 注意：使用摄像头功能需要 HTTPS 或 localhost 环境。
+
+## 数据来源
+产品图片来源于 [HellermannTyton 官网](https://www.hellermanntyton.com)。
+
+## License
+MIT

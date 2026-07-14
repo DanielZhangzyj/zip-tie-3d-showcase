@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D扎带交互展示 - HellermannTyton</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <style>
+        :root {
+            --primary: #e87722;
+            --primary-dark: #c5621a;
+            --bg-dark: #0f1117;
+            --bg-card: #1a1d27;
+            --bg-sidebar: #161822;
+            --text-primary: #e8eaf0;
+            --text-secondary: #8b90a0;
+            --border: #2a2e3d;
+            --success: #4caf50;
+            --info: #2196f3;
+            --warning: #ff9800;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #app { display: flex; width: 100%; height: 100%; }
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        .sidebar-header p {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        .product-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        .product-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+            border: 1px solid transparent;
+        }
+        .product-item:hover {
+            background: rgba(232, 119, 34, 0.1);
+            border-color: rgba(232, 119, 34, 0.3);
+        }
+        .product-item.active {
+            background: rgba(232, 119, 34, 0.15);
+            border-color: var(--primary);
+        }
+        .product-thumb {
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            object-fit: cover;
+            margin-right: 10px;
+            background: var(--bg-dark);
+        }
+        .product-info { flex: 1; }
+        .product-model {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .product-name {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+        #canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Webcam Preview */
+        .webcam-container {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 200px;
+            height: 150px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
+            z-index: 50;
+        }
+        .webcam-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        .webcam-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        .webcam-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 4px 8px;
+            background: rgba(0,0,0,0.7);
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+        /* Product Info Card */
+        .info-card {
+            position: absolute;
+            bottom: 80px;
+            left: 16px;
+            background: rgba(22, 24, 34, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            max-width: 280px;
+            z-index: 50;
+        }
+        .info-card h3 {
+            font-size: 14px;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        .info-card .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .info-card .info-label { color: var(--text-secondary); }
+        .info-card .info-value { color: var(--text-primary); }
+        /* Gesture Hints */
+        .gesture-hints {
+            position: absolute;
+            bottom: 80px;
+            right: 16px;
+            background: rgba(22, 24, 34, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            z-index: 50;
+            max-width: 220px;
+        }
+        .gesture-hints h4 {
+            font-size: 11px;
+            color: var(--primary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .gesture-item {
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            padding: 4px 0;
+            color: var(--text-secondary);
+        }
+        .gesture-icon {
+            width: 24px;
+            text-align: center;
+            margin-right: 8px;
+            font-size: 14px;
+        }
+        /* Status Bar */
+        .status-bar {
+            height: 40px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 11px;
+        }
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+        }
+        .status-dot.active { background: var(--success); }
+        .status-dot.warning { background: var(--warning); }
+        /* Splash Screen */
+        #splash {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        #splash.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .splash-logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin-bottom: 24px;
+        }
+        .splash-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .splash-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+        .splash-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: var(--bg-sidebar);
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        /* Toggle Sidebar Button */
+        .toggle-sidebar {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 36px;
+            height: 36px;
+            background: rgba(22, 24, 34, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 60;
+            font-size: 18px;
+        }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                transform: translateX(-100%);
+            }
+            .sidebar.open { transform: translateX(0); }
+            .webcam-container { width: 140px; height: 105px; }
+            .info-card, .gesture-hints { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="splash">
+        <div class="splash-logo">🔧</div>
+        <div class="splash-title">3D 扎带交互展示</div>
+        <div class="splash-subtitle">Three.js × MediaPipe 手势控制</div>
+        <div id="splash-buttons" class="splash-buttons" style="display:none;">
+            <button class="btn btn-primary" onclick="startWithCamera()">📷 摄像头控制</button>
+            <button class="btn btn-secondary" onclick="startWithMouse()">🖱️ 鼠标控制</button>
+        </div>
+        <div id="splash-loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在加载 3D 引擎...</div>
+        </div>
+    </div>
+
+    <div id="app">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>🔧 扎带产品库</h1>
+                <p>选择产品查看 3D 模型</p>
+            </div>
+            <div class="product-list" id="productList"></div>
+        </div>
+        <div class="main-content">
+            <div class="toggle-sidebar" id="toggleSidebar">☰</div>
+            <div id="canvas-container"></div>
+            <div class="webcam-container" id="webcamContainer" style="display:none;">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="webcamOverlay"></canvas>
+                <div class="webcam-label">手势识别</div>
+            </div>
+            <div class="info-card" id="infoCard">
+                <h3 id="infoTitle">选择产品</h3>
+                <div id="infoContent"></div>
+            </div>
+            <div class="gesture-hints">
+                <h4>操作指南</h4>
+                <div class="gesture-item"><span class="gesture-icon">✋</span>移动手掌 - 旋转</div>
+                <div class="gesture-item"><span class="gesture-icon">🖐️</span>张开手掌 - 放大</div>
+                <div class="gesture-item"><span class="gesture-icon">✊</span>握拳 - 缩小</div>
+                <div class="gesture-item"><span class="gesture-icon">✊➡️</span>握拳移动 - 平移</div>
+            </div>
+            <div class="status-bar">
+                <div class="status-left">
+                    <div class="status-item">
+                        <div class="status-dot" id="camStatus"></div>
+                        <span id="camText">摄像头未连接</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot" id="handStatus"></div>
+                        <span id="handText">未检测到手部</span>
+                    </div>
+                    <div class="status-item" id="gestureDisplay" style="display:none;">
+                        <span>手势: <strong id="gestureName">-</strong></span>
+                    </div>
+                </div>
+                <div class="status-right">
+                    <span id="fpsDisplay">60 FPS</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ====== PRODUCT DATA ======
+        const products = [
+            { id: 1, model: 'T30R', name: '内锯齿PA66HS扎带', material: 'PA66HS', temp: '+105°C', type: 'A', image: './assets/images/tie1_T30R_main.jpg', tensile: '135N', desc: 'Heat stabilized, inside serrated' },
+            { id: 2, model: 'PT2A', name: 'PEEK外锯齿高温扎带', material: 'PEEK', temp: '+240°C', type: 'C', image: './assets/images/tie2_PT2A_main.jpg', tensile: '230N', desc: 'High temperature PEEK, outside serrated' },
+            { id: 3, model: 'MBT8S', name: '不锈钢316L扎带', material: 'SS316L', temp: '-60~+300°C', type: 'B', image: './assets/images/tie3_MBT8S_main.jpg', tensile: '900N', desc: 'Stainless steel, ball bearing lock' },
+            { id: 4, model: 'TEXTIE M', name: '魔术贴可释放扎带', material: 'PA66/PP', temp: '-40~+85°C', type: 'D', image: './assets/images/tie4_TEXTIE_main.jpg', tensile: '50N', desc: 'Hook and loop, reusable 400x' },
+            { id: 5, model: 'T50SVCOC', name: '带管道固定夹扎带', material: 'PA66HS/PA66HIRHS', temp: '+105°C', type: 'E', image: './assets/images/tie5_SVCOC_main.jpg', tensile: '222N', desc: '2-piece with pipe clip, rotatable 360°' },
+            { id: 6, model: 'KR8/43', name: '无锯齿玻璃纤维销锁定扎带', material: 'PA66HS', temp: '+105°C', type: 'F', image: './assets/images/tie6_KR8_main.jpg', tensile: '785N', desc: 'Vibration absorbing, glass fibre pin' },
+            { id: 7, model: 'T18R', name: 'PA46耐高温扎带', material: 'PA46', temp: '+150°C', type: 'A', image: './assets/images/tie7_T18R_main.jpg', tensile: '80N', desc: 'Polyamide 4.6, inside serrated' },
+            { id: 8, model: 'T30RFT5', name: '带杉树固定脚扎带', material: 'PA66HS/PA66HIRHS', temp: '+105°C', type: 'E2', image: './assets/images/tie8_RFT5_main.jpg', tensile: '222N', desc: '2-piece with fir tree, disc for round holes' },
+            { id: 9, model: 'KR8/S1', name: '无尽长度扎带系统', material: 'PA66HS', temp: '+105°C', type: 'F2', image: './assets/images/tie9_KR8S1_main.jpg', tensile: '785N', desc: 'Endless strap 50m, glass fibre pin' },
+            { id: 10, model: 'SR255S', name: '可释放重型扎带', material: 'PA66HIRHSUV', temp: '+105°C', type: 'G', image: './assets/images/tie10_SR255S_main.jpg', tensile: '1115N', desc: 'Heavy duty, releasable, UV stabilized' }
+        ];
+
+        // ====== THREE.JS SETUP ======
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f1117);
+        scene.fog = new THREE.Fog(0x0f1117, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(5, 4, 6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 15;
+        controls.enablePan = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0x6688cc, 0.3);
+        fillLight.position.set(-5, 3, -5);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xff8844, 0.3);
+        rimLight.position.set(-3, 2, 5);
+        scene.add(rimLight);
+
+        const pointLight = new THREE.PointLight(0xe87722, 0.5, 10);
+        pointLight.position.set(2, 3, 2);
+        scene.add(pointLight);
+
+        // Ground
+        const gridHelper = new THREE.GridHelper(20, 20, 0x2a2e3d, 0x1a1d27);
+        scene.add(gridHelper);
+
+        const planeGeometry = new THREE.PlaneGeometry(20, 20);
+        const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -0.01;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // Particle system
+        const particleGeo = new THREE.BufferGeometry();
+        const particleCount = 200;
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 20;
+            positions[i + 1] = Math.random() * 10;
+            positions[i + 2] = (Math.random() - 0.5) * 20;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0xe87722, size: 0.03, transparent: true, opacity: 0.6 });
+        const particles = new THREE.Points(particleGeo, particleMat);
+        scene.add(particles);
+
+        // ====== 3D MODEL GENERATORS ======
+        function createMaterials(type) {
+            const mats = {
+                A: new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.7, metalness: 0.0 }),
+                B: new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.2, metalness: 0.9 }),
+                C: new THREE.MeshStandardMaterial({ color: 0xc8b898, roughness: 0.4, metalness: 0.1 }),
+                D: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9, metalness: 0.0 }),
+                E: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.1 }),
+                F: new THREE.MeshStandardMaterial({ color: 0xf0f0e8, roughness: 0.5, metalness: 0.0 }),
+                G: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.05 }),
+            };
+            return mats[type] || mats.A;
+        }
+
+        // Type A: Standard inside-serrated (T30R, T18R)
+        function createTypeA(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('A');
+            const color = product.model === 'T18R' ? 0xfff8f0 : 0xf5f5f0;
+            mat.color.setHex(color);
+
+            // Body - curved strap
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0.8, 0, 0.3),
+                new THREE.Vector3(1.6, 0, 0.5),
+                new THREE.Vector3(2.4, 0, 0.4),
+                new THREE.Vector3(3.0, 0, 0.1),
+            ]);
+            const bodyGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.3, 0.15, 0.25);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.15, 0, 0);
+            head.castShadow = true;
+            group.add(head);
+
+            // Locking mechanism
+            const lockGeo = new THREE.BoxGeometry(0.08, 0.12, 0.18);
+            const lockMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3, metalness: 0.5 });
+            const lock = new THREE.Mesh(lockGeo, lockMat);
+            lock.position.set(-0.05, 0.05, 0);
+            group.add(lock);
+
+            // Serrations on body
+            for (let i = 0; i < 15; i++) {
+                const t = 0.1 + (i / 15) * 0.7;
+                const point = curve.getPoint(t);
+                const tangent = curve.getTangent(t);
+                const serrGeo = new THREE.BoxGeometry(0.06, 0.03, 0.14);
+                const serr = new THREE.Mesh(serrGeo, mat);
+                serr.position.copy(point);
+                serr.position.y += 0.06;
+                serr.lookAt(point.clone().add(tangent));
+                group.add(serr);
+            }
+
+            return group;
+        }
+
+        // Type B: Stainless steel (MBT8S)
+        function createTypeB(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('B');
+
+            // Metal strap - straight
+            const strapGeo = new THREE.BoxGeometry(2.5, 0.05, 0.12);
+            const strap = new THREE.Mesh(strapGeo, mat);
+            strap.position.set(1.0, 0, 0);
+            strap.castShadow = true;
+            group.add(strap);
+
+            // Head with ball bearing lock
+            const headGeo = new THREE.BoxGeometry(0.25, 0.18, 0.2);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.12, 0, 0);
+            head.castShadow = true;
+            group.add(head);
+
+            // Ball bearing
+            const ballGeo = new THREE.SphereGeometry(0.06, 16, 16);
+            const ball = new THREE.Mesh(ballGeo, mat);
+            ball.position.set(-0.08, 0.02, 0);
+            group.add(ball);
+
+            // Rolled end
+            const rollGeo = new THREE.TorusGeometry(0.08, 0.02, 8, 16, Math.PI);
+            const roll = new THREE.Mesh(rollGeo, mat);
+            roll.position.set(2.3, 0, 0);
+            roll.rotation.y = Math.PI / 2;
+            group.add(roll);
+
+            return group;
+        }
+
+        // Type C: PEEK outside-serrated (PT2A)
+        function createTypeC(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('C');
+
+            // Body
+            const bodyGeo = new THREE.BoxGeometry(2.2, 0.06, 0.1);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.set(0.9, 0, 0);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head - deeper groove
+            const headGeo = new THREE.BoxGeometry(0.3, 0.2, 0.18);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.15, 0, 0);
+            head.castShadow = true;
+            group.add(head);
+
+            // Outside serrations
+            for (let i = 0; i < 20; i++) {
+                const serrGeo = new THREE.BoxGeometry(0.08, 0.02, 0.12);
+                const serr = new THREE.Mesh(serrGeo, mat);
+                serr.position.set(0.2 + i * 0.1, -0.04, 0);
+                group.add(serr);
+            }
+
+            return group;
+        }
+
+        // Type D: Hook and loop (TEXTIE M)
+        function createTypeD(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('D');
+
+            // Loop shape
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-0.3, 0, 0),
+                new THREE.Vector3(-0.3, 0, 0.4),
+                new THREE.Vector3(0.3, 0, 0.4),
+                new THREE.Vector3(0.3, 0, -0.4),
+                new THREE.Vector3(-0.3, 0, -0.4),
+                new THREE.Vector3(-0.3, 0, 0),
+            ]);
+            const bodyGeo = new THREE.TubeGeometry(curve, 30, 0.12, 8, true);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.castShadow = true;
+            group.add(body);
+
+            // Texture dots (hook side)
+            const hookMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+            for (let i = 0; i < 20; i++) {
+                const dotGeo = new THREE.SphereGeometry(0.015, 6, 6);
+                const dot = new THREE.Mesh(dotGeo, hookMat);
+                const angle = (i / 20) * Math.PI * 2;
+                dot.position.set(0.15 * Math.cos(angle), 0.13, 0.15 * Math.sin(angle));
+                group.add(dot);
+            }
+
+            return group;
+        }
+
+        // Type E: With pipe clip (T50SVCOC)
+        function createTypeE(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('E');
+
+            // Standard tie body
+            const bodyGeo = new THREE.BoxGeometry(1.8, 0.08, 0.12);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.set(0.7, 0, 0);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.25, 0.15, 0.2);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.12, 0, 0);
+            group.add(head);
+
+            // Pipe clip attachment
+            const clipGeo = new THREE.TorusGeometry(0.25, 0.06, 12, 20, Math.PI * 1.5);
+            const clip = new THREE.Mesh(clipGeo, mat);
+            clip.position.set(0, 0, 0.35);
+            clip.rotation.x = Math.PI / 2;
+            clip.castShadow = true;
+            group.add(clip);
+
+            // Connector
+            const connGeo = new THREE.BoxGeometry(0.1, 0.06, 0.2);
+            const conn = new THREE.Mesh(connGeo, mat);
+            conn.position.set(0, 0, 0.2);
+            group.add(conn);
+
+            return group;
+        }
+
+        // Type E2: With fir tree (T30RFT5)
+        function createTypeE2(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('E');
+
+            // Standard tie body
+            const bodyGeo = new THREE.BoxGeometry(1.5, 0.08, 0.12);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.set(0.6, 0.15, 0);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.22, 0.14, 0.18);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.1, 0.15, 0);
+            group.add(head);
+
+            // Fir tree foot
+            const trunkGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.3, 8);
+            const trunk = new THREE.Mesh(trunkGeo, mat);
+            trunk.position.set(0, -0.05, 0);
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            // Disc
+            const discGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.02, 16);
+            const disc = new THREE.Mesh(discGeo, mat);
+            disc.position.set(0, 0.08, 0);
+            group.add(disc);
+
+            // Barbs on fir tree
+            for (let i = 0; i < 4; i++) {
+                const barbGeo = new THREE.ConeGeometry(0.08, 0.06, 8);
+                const barb = new THREE.Mesh(barbGeo, mat);
+                barb.position.set(0, -0.05 - i * 0.06, 0);
+                barb.rotation.x = Math.PI;
+                group.add(barb);
+            }
+
+            return group;
+        }
+
+        // Type F: Glass fibre pin lock (KR8/43)
+        function createTypeF(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('F');
+
+            // Smooth strap
+            const strapGeo = new THREE.BoxGeometry(2.8, 0.1, 0.15);
+            const strap = new THREE.Mesh(strapGeo, mat);
+            strap.position.set(1.2, 0, 0);
+            strap.castShadow = true;
+            group.add(strap);
+
+            // Cylindrical head
+            const headGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.2, 16);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.1, 0, 0);
+            head.rotation.z = Math.PI / 2;
+            head.castShadow = true;
+            group.add(head);
+
+            // Pin
+            const pinGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.18, 8);
+            const pinMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 });
+            const pin = new THREE.Mesh(pinGeo, pinMat);
+            pin.position.set(-0.1, 0.08, 0);
+            group.add(pin);
+
+            return group;
+        }
+
+        // Type F2: Endless strap system (KR8/S1)
+        function createTypeF2(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('F');
+
+            // Coiled strap
+            const spiralCurve = new THREE.CatmullRomCurve3([]);
+            for (let i = 0; i <= 50; i++) {
+                const t = i / 50;
+                const angle = t * Math.PI * 6;
+                const radius = 0.4 + t * 0.3;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                const y = t * 0.3;
+                spiralCurve.points.push(new THREE.Vector3(x, y, z));
+            }
+            const coilGeo = new THREE.TubeGeometry(spiralCurve, 50, 0.06, 8, false);
+            const coil = new THREE.Mesh(coilGeo, mat);
+            coil.castShadow = true;
+            group.add(coil);
+
+            // Loose head
+            const headGeo = new THREE.BoxGeometry(0.3, 0.15, 0.2);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(1.0, 0.1, 0.5);
+            group.add(head);
+
+            return group;
+        }
+
+        // Type G: Releasable heavy duty (SR255S)
+        function createTypeG(product) {
+            const group = new THREE.Group();
+            const mat = createMaterials('G');
+
+            // Wide body
+            const bodyGeo = new THREE.BoxGeometry(2.0, 0.12, 0.18);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.set(0.8, 0, 0);
+            body.castShadow = true;
+            group.add(body);
+
+            // Head with release trigger
+            const headGeo = new THREE.BoxGeometry(0.35, 0.2, 0.22);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.set(-0.17, 0, 0);
+            head.castShadow = true;
+            group.add(head);
+
+            // Release trigger (red accent)
+            const triggerGeo = new THREE.BoxGeometry(0.1, 0.06, 0.16);
+            const triggerMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5, metalness: 0.2 });
+            const trigger = new THREE.Mesh(triggerGeo, triggerMat);
+            trigger.position.set(-0.25, 0.08, 0);
+            group.add(trigger);
+
+            // Large serrations
+            for (let i = 0; i < 12; i++) {
+                const serrGeo = new THREE.BoxGeometry(0.1, 0.04, 0.16);
+                const serr = new THREE.Mesh(serrGeo, mat);
+                serr.position.set(0.3 + i * 0.14, 0.08, 0);
+                group.add(serr);
+            }
+
+            return group;
+        }
+
+        // Model factory
+        function createModel(product) {
+            switch (product.type) {
+                case 'A': return createTypeA(product);
+                case 'B': return createTypeB(product);
+                case 'C': return createTypeC(product);
+                case 'D': return createTypeD(product);
+                case 'E': return createTypeE(product);
+                case 'E2': return createTypeE2(product);
+                case 'F': return createTypeF(product);
+                case 'F2': return createTypeF2(product);
+                case 'G': return createTypeG(product);
+                default: return createTypeA(product);
+            }
+        }
+
+        // ====== PRODUCT MANAGEMENT ======
+        let currentModel = null;
+        let currentProduct = products[0];
+        let targetRotation = { x: 0, y: 0 };
+        let targetScale = 1.0;
+        let targetPosition = { x: 0, y: 0 };
+        let isAutoRotating = true;
+
+        function loadProduct(product) {
+            if (currentModel) {
+                scene.remove(currentModel);
+            }
+            currentProduct = product;
+            currentModel = createModel(product);
+            scene.add(currentModel);
+
+            // Reset transforms
+            targetRotation = { x: 0, y: 0 };
+            targetScale = 1.0;
+            targetPosition = { x: 0, y: 0 };
+
+            // Update UI
+            updateInfoCard(product);
+            updateProductList(product);
+        }
+
+        function updateInfoCard(product) {
+            document.getElementById('infoTitle').textContent = product.model;
+            document.getElementById('infoContent').innerHTML = `
+                <div class="info-row"><span class="info-label">名称</span><span class="info-value">${product.name}</span></div>
+                <div class="info-row"><span class="info-label">材质</span><span class="info-value">${product.material}</span></div>
+                <div class="info-row"><span class="info-label">耐温</span><span class="info-value">${product.temp}</span></div>
+                <div class="info-row"><span class="info-label">抗拉</span><span class="info-value">${product.tensile}</span></div>
+                <div class="info-row"><span class="info-label">描述</span><span class="info-value">${product.desc}</span></div>
+            `;
+        }
+
+        function updateProductList(activeProduct) {
+            document.querySelectorAll('.product-item').forEach(item => {
+                item.classList.toggle('active', parseInt(item.dataset.id) === activeProduct.id);
+            });
+        }
+
+        // Build product list UI
+        const productList = document.getElementById('productList');
+        products.forEach(p => {
+            const item = document.createElement('div');
+            item.className = 'product-item' + (p.id === 1 ? ' active' : '');
+            item.dataset.id = p.id;
+            item.innerHTML = `
+                <img class="product-thumb" src="${p.image}" alt="${p.model}" loading="lazy">
+                <div class="product-info">
+                    <div class="product-model">${p.model}</div>
+                    <div class="product-name">${p.name}</div>
+                </div>
+            `;
+            item.addEventListener('click', () => loadProduct(p));
+            productList.appendChild(item);
+        });
+
+        // Load initial product
+        loadProduct(products[0]);
+
+        // ====== MEDIAPIPE HAND TRACKING ======
+        let hands = null;
+        let camera_utils = null;
+        let isCameraActive = false;
+        let lastPalmCenter = null;
+        let palmHistory = [];
+        let gestureState = 'none';
+        let lastGestureTime = 0;
+
+        // Finger indices for MediaPipe Hands
+        const WRIST = 0;
+        const THUMB_TIP = 4;
+        const INDEX_TIP = 8, INDEX_PIP = 6;
+        const MIDDLE_TIP = 12, MIDDLE_PIP = 10;
+        const RING_TIP = 16, RING_PIP = 14;
+        const PINKY_TIP = 20, PINKY_PIP = 18;
+
+        function isFingerExtended(landmarks, tipIdx, pipIdx) {
+            return landmarks[tipIdx].y < landmarks[pipIdx].y;
+        }
+
+        function isFist(landmarks) {
+            const fingers = [
+                { tip: INDEX_TIP, pip: INDEX_PIP },
+                { tip: MIDDLE_TIP, pip: MIDDLE_PIP },
+                { tip: RING_TIP, pip: RING_PIP },
+                { tip: PINKY_TIP, pip: PINKY_PIP }
+            ];
+            return fingers.every(f => !isFingerExtended(landmarks, f.tip, f.pip));
+        }
+
+        function isHandOpen(landmarks) {
+            return isFingerExtended(landmarks, INDEX_TIP, INDEX_PIP) &&
+                isFingerExtended(landmarks, MIDDLE_TIP, MIDDLE_PIP) &&
+                isFingerExtended(landmarks, RING_TIP, RING_PIP) &&
+                isFingerExtended(landmarks, PINKY_TIP, PINKY_PIP);
+        }
+
+        function getPalmCenter(landmarks) {
+            const indices = [WRIST, 5, 9, 13, 17];
+            const center = { x: 0, y: 0 };
+            indices.forEach(i => {
+                center.x += landmarks[i].x;
+                center.y += landmarks[i].y;
+            });
+            center.x /= indices.length;
+            center.y /= indices.length;
+            return center;
+        }
+
+        function getHandOpenness(landmarks) {
+            const thumbTip = landmarks[THUMB_TIP];
+            const indexTip = landmarks[INDEX_TIP];
+            return Math.sqrt(
+                Math.pow(thumbTip.x - indexTip.x, 2) +
+                Math.pow(thumbTip.y - indexTip.y, 2)
+            );
+        }
+
+        function smoothPalmCenter(center) {
+            palmHistory.push(center);
+            if (palmHistory.length > 5) palmHistory.shift();
+            const smoothed = { x: 0, y: 0 };
+            palmHistory.forEach(p => {
+                smoothed.x += p.x;
+                smoothed.y += p.y;
+            });
+            smoothed.x /= palmHistory.length;
+            smoothed.y /= palmHistory.length;
+            return smoothed;
+        }
+
+        async function initMediaPipe() {
+            try {
+                // Dynamic import for MediaPipe
+                const handsModule = await import('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js');
+                const cameraModule = await import('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js');
+                const drawingModule = await import('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js');
+
+                const Hands = handsModule.Hands || window.Hands;
+                const Camera = cameraModule.Camera || window.Camera;
+                const drawConnectors = drawingModule.drawConnectors || window.drawConnectors;
+                const drawLandmarks = drawingModule.drawLandmarks || window.drawLandmarks;
+                const HAND_CONNECTIONS = drawingModule.HAND_CONNECTIONS || window.HAND_CONNECTIONS;
+
+                hands = new Hands({
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+                });
+
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+
+                hands.onResults((results) => {
+                    const canvas = document.getElementById('webcamOverlay');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = results.image.width;
+                    canvas.height = results.image.height;
+                    ctx.save();
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        const landmarks = results.multiHandLandmarks[0];
+
+                        // Draw skeleton
+                        drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#e87722', lineWidth: 2 });
+                        drawLandmarks(ctx, landmarks, { color: '#4caf50', lineWidth: 1, radius: 3 });
+
+                        // Process gesture
+                        processGesture(landmarks);
+
+                        document.getElementById('handStatus').classList.add('active');
+                        document.getElementById('handText').textContent = '检测到手部';
+                    } else {
+                        gestureState = 'none';
+                        document.getElementById('handStatus').classList.remove('active');
+                        document.getElementById('handText').textContent = '未检测到手部';
+                        document.getElementById('gestureDisplay').style.display = 'none';
+                        palmHistory = [];
+                    }
+                    ctx.restore();
+                });
+
+                // Start camera
+                const video = document.getElementById('webcam');
+                const camera_utils = new Camera(video, {
+                    onFrame: async () => {
+                        await hands.send({ image: video });
+                    },
+                    width: 320,
+                    height: 240
+                });
+                await camera_utils.start();
+
+                isCameraActive = true;
+                document.getElementById('camStatus').classList.add('active');
+                document.getElementById('camText').textContent = '摄像头已连接';
+                document.getElementById('webcamContainer').style.display = 'block';
+                controls.enabled = false; // Disable OrbitControls when using gestures
+
+            } catch (err) {
+                console.error('MediaPipe init failed:', err);
+                document.getElementById('camText').textContent = '摄像头初始化失败';
+                startWithMouse();
+            }
+        }
+
+        function processGesture(landmarks) {
+            const palmCenter = smoothPalmCenter(getPalmCenter(landmarks));
+            const openness = getHandOpenness(landmarks);
+            const isFistNow = isFist(landmarks);
+            const isOpenNow = isHandOpen(landmarks);
+            const now = Date.now();
+
+            document.getElementById('gestureDisplay').style.display = 'flex';
+
+            if (isFistNow) {
+                // Fist state
+                if (lastPalmCenter) {
+                    const dx = palmCenter.x - lastPalmCenter.x;
+                    const dy = palmCenter.y - lastPalmCenter.y;
+                    const moveDist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (moveDist > 0.008) {
+                        // Fist + move = pan
+                        gestureState = 'pan';
+                        targetPosition.x -= dx * 3;
+                        targetPosition.y += dy * 3;
+                        document.getElementById('gestureName').textContent = '平移';
+                    } else {
+                        // Fist hold = zoom out
+                        gestureState = 'zoom_out';
+                        targetScale = Math.max(0.3, targetScale - 0.003);
+                        document.getElementById('gestureName').textContent = '缩小';
+                    }
+                }
+            } else if (isOpenNow) {
+                // Open hand = zoom in
+                gestureState = 'zoom_in';
+                targetScale = Math.min(3.0, targetScale + 0.005);
+                document.getElementById('gestureName').textContent = '放大';
+            } else {
+                // Normal hand movement = rotate
+                if (lastPalmCenter) {
+                    const dx = palmCenter.x - lastPalmCenter.x;
+                    const dy = palmCenter.y - lastPalmCenter.y;
+                    const moveDist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (moveDist > 0.003) {
+                        gestureState = 'rotate';
+                        targetRotation.y -= dx * 3;
+                        targetRotation.x += dy * 3;
+                        targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotation.x));
+                        isAutoRotating = false;
+                        document.getElementById('gestureName').textContent = '旋转';
+                    } else {
+                        gestureState = 'idle';
+                        document.getElementById('gestureName').textContent = '静止';
+                    }
+                }
+            }
+
+            lastPalmCenter = { x: palmCenter.x, y: palmCenter.y };
+        }
+
+        // ====== ANIMATION LOOP ======
+        const clock = new THREE.Clock();
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            if (currentModel) {
+                // Smooth transitions
+                const lerpFactor = 1 - Math.pow(0.001, delta);
+
+                if (isAutoRotating && gestureState === 'none') {
+                    currentModel.rotation.y += delta * 0.3;
+                    currentModel.position.y = Math.sin(elapsed * 0.5) * 0.1;
+                } else {
+                    currentModel.rotation.x += (targetRotation.x - currentModel.rotation.x) * lerpFactor;
+                    currentModel.rotation.y += (targetRotation.y - currentModel.rotation.y) * lerpFactor;
+                }
+
+                const currentScale = currentModel.scale.x;
+                const newScale = currentScale + (targetScale - currentScale) * lerpFactor;
+                currentModel.scale.setScalar(newScale);
+
+                currentModel.position.x += (targetPosition.x - currentModel.position.x) * lerpFactor;
+                currentModel.position.y += (targetPosition.y - currentModel.position.y) * lerpFactor;
+            }
+
+            // Animate particles
+            const positions = particles.geometry.attributes.position.array;
+            for (let i = 1; i < positions.length; i += 3) {
+                positions[i] += delta * 0.2;
+                if (positions[i] > 10) positions[i] = 0;
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+            particles.rotation.y = elapsed * 0.05;
+
+            // FPS counter
+            frameCount++;
+            const now = performance.now();
+            if (now - lastFpsTime >= 1000) {
+                document.getElementById('fpsDisplay').textContent = frameCount + ' FPS';
+                frameCount = 0;
+                lastFpsTime = now;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ====== RESIZE HANDLER ======
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // ====== UI INTERACTIONS ======
+        document.getElementById('toggleSidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        // ====== SPLASH SCREEN ======
+        window.startWithCamera = async function () {
+            document.getElementById('splash-loading').style.display = 'flex';
+            document.getElementById('splash-buttons').style.display = 'none';
+            await initMediaPipe();
+            hideSplash();
+        };
+
+        window.startWithMouse = function () {
+            hideSplash();
+        };
+
+        function hideSplash() {
+            const splash = document.getElementById('splash');
+            splash.classList.add('hidden');
+            setTimeout(() => splash.style.display = 'none', 500);
+        }
+
+        // Show buttons after short delay
+        setTimeout(() => {
+            document.getElementById('splash-loading').style.display = 'none';
+            document.getElementById('splash-buttons').style.display = 'flex';
+        }, 1500);
+    </script>
+</body>
+</html>
